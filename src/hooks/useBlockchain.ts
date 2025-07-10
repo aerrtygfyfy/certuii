@@ -25,11 +25,6 @@ export const useBlockchain = () => {
       return null
     }
 
-    if (!walletClient) {
-      toast.error('Client wallet non disponible')
-      return null
-    }
-
     try {
       setIsDeploying(true)
       setDeploymentStatus('Vérification du réseau...')
@@ -38,7 +33,20 @@ export const useBlockchain = () => {
       const targetChainId = getChainId(blockchain)
       if (chain?.id !== targetChainId) {
         setDeploymentStatus('Changement de réseau...')
-        await switchNetwork?.(targetChainId)
+        if (switchNetwork) {
+          await new Promise<void>((resolve, reject) => {
+            switchNetwork(targetChainId, {
+              onSuccess: () => {
+                console.log('✅ Network switched successfully')
+                resolve()
+              },
+              onError: (error) => {
+                console.error('❌ Network switch failed:', error)
+                reject(error)
+              }
+            })
+          })
+        }
         
         // Attendre un peu pour que le changement de réseau soit effectif
         await new Promise(resolve => setTimeout(resolve, 2000))
@@ -56,13 +64,12 @@ export const useBlockchain = () => {
 
       setDeploymentStatus('Déploiement du contrat...')
       
-      // Passer le walletClient au service blockchain
-      const result = await blockchainService.deployCompanyContractWithWallet(
+      // Déployer le contrat via l'API backend
+      const result = await blockchainService.deployCompanyContract(
         companyName,
         description,
         symbol,
-        blockchain,
-        walletClient
+        blockchain
       )
 
       setDeploymentStatus('Contrat déployé avec succès!')
@@ -81,9 +88,9 @@ export const useBlockchain = () => {
       
       let errorMessage = 'Erreur lors du déploiement'
       
-      if (error.message?.includes('User rejected')) {
+      if (error.message?.includes('User rejected') || error.message?.includes('annulée')) {
         errorMessage = 'Transaction annulée par l\'utilisateur'
-      } else if (error.message?.includes('insufficient funds')) {
+      } else if (error.message?.includes('insufficient funds') || error.message?.includes('Solde insuffisant')) {
         errorMessage = 'Fonds insuffisants pour le déploiement'
       } else if (error.message?.includes('gas')) {
         errorMessage = 'Erreur de gas - Ajustez le gas limit'
@@ -97,67 +104,6 @@ export const useBlockchain = () => {
     } finally {
       setIsDeploying(false)
       // Réinitialiser le statut après 5 secondes
-      setTimeout(() => setDeploymentStatus(''), 5000)
-    }
-  }
-
-  const deployViaFactory = async (
-    companyName: string,
-    description: string,
-    symbol: string,
-    blockchain: string
-  ) => {
-    if (!address) {
-      toast.error('Veuillez connecter votre wallet')
-      return null
-    }
-
-    try {
-      setIsDeploying(true)
-      setDeploymentStatus('Utilisation de la factory...')
-      
-      // Switch to correct network if needed
-      const targetChainId = getChainId(blockchain)
-      if (chain?.id !== targetChainId) {
-        setDeploymentStatus('Changement de réseau...')
-        await switchNetwork?.(targetChainId)
-        await new Promise(resolve => setTimeout(resolve, 2000))
-      }
-
-      setDeploymentStatus('Déploiement via factory...')
-      
-      const result = await blockchainService.deployViaFactory(
-        companyName,
-        description,
-        symbol,
-        blockchain
-      )
-
-      setDeploymentStatus('Contrat déployé via factory!')
-      toast.success(`Smart contract déployé via factory!\nAdresse: ${result.contractAddress}`)
-      
-      return {
-        ...result,
-        blockchain,
-        companyName,
-        description,
-        symbol
-      }
-    } catch (error: any) {
-      console.error('Factory deployment error:', error)
-      
-      let errorMessage = 'Erreur lors du déploiement via factory'
-      if (error.message?.includes('Factory contract not available')) {
-        errorMessage = 'Contrat factory non disponible sur ce réseau'
-      } else if (error.message) {
-        errorMessage = error.message
-      }
-      
-      setDeploymentStatus(`Erreur: ${errorMessage}`)
-      toast.error(errorMessage)
-      return null
-    } finally {
-      setIsDeploying(false)
       setTimeout(() => setDeploymentStatus(''), 5000)
     }
   }
@@ -176,10 +122,23 @@ export const useBlockchain = () => {
       return null
     }
 
+    if (!walletClient) {
+      toast.error('Client wallet non disponible')
+      return null
+    }
+
     try {
       setIsMinting(true)
       
-      const result = await blockchainService.issueCertificate(certificateData)
+      const result = await blockchainService.issueCertificate({
+        contractAddress: certificateData.contractAddress,
+        recipientAddress: certificateData.recipientAddress,
+        recipientName: certificateData.recipientName,
+        courseName: certificateData.courseName,
+        ipfsHash: certificateData.ipfsHash,
+        isPublic: certificateData.isPublic,
+        isSoulbound: certificateData.isSoulbound
+      })
       
       toast.success(`Certificat minté avec succès!\nToken ID: ${result.tokenId}`)
       return result
@@ -187,10 +146,12 @@ export const useBlockchain = () => {
       console.error('Minting error:', error)
       
       let errorMessage = 'Erreur lors du mint'
-      if (error.message?.includes('User rejected')) {
+      if (error.message?.includes('User rejected') || error.message?.includes('annulée')) {
         errorMessage = 'Transaction annulée par l\'utilisateur'
       } else if (error.message?.includes('insufficient funds')) {
         errorMessage = 'Fonds insuffisants pour le mint'
+      } else if (error.message?.includes('not the owner') || error.message?.includes('not authorized')) {
+        errorMessage = 'Vous n\'êtes pas autorisé à émettre des certificats sur ce contrat'
       } else if (error.message) {
         errorMessage = error.message
       }
@@ -239,7 +200,7 @@ export const useBlockchain = () => {
       polygon: 137,
       polygonMumbai: 80001
     }
-    return chainIds[blockchain] || 1
+    return chainIds[blockchain] || 11155111 // Default to Sepolia
   }
 
   const getNetworkName = (chainId: number): string => {
@@ -257,7 +218,6 @@ export const useBlockchain = () => {
   return {
     // Méthodes de déploiement
     deployContract,
-    deployViaFactory,
     
     // Méthodes pour les certificats
     mintCertificate,

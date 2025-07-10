@@ -14,7 +14,8 @@ import {
   Loader2,
   Globe,
   Mail,
-  MapPin
+  MapPin,
+  AlertTriangle
 } from 'lucide-react'
 import { useAuthStore } from '../store/useAuthStore'
 import { useCompany } from '../hooks/useCompany'
@@ -40,11 +41,12 @@ const CompanySettings: React.FC = () => {
   const { address } = useAccount()
   const { chain } = useNetwork()
   const { company, loading, saveCompany, setContractAddress } = useCompany()
-  const { deployContract, isDeploying } = useBlockchain()
+  const { deployContract, isDeploying, deploymentStatus } = useBlockchain()
   const { uploadFile, uploading } = useIPFS()
   
   const [logo, setLogo] = useState<string>('')
   const [activeTab, setActiveTab] = useState('profile')
+  const [showDeploymentDetails, setShowDeploymentDetails] = useState(false)
 
   const {
     register,
@@ -60,6 +62,8 @@ const CompanySettings: React.FC = () => {
   })
 
   const watchedBlockchain = watch('blockchain')
+  const watchedName = watch('name')
+  const watchedSymbol = watch('symbol')
 
   useEffect(() => {
     if (company) {
@@ -129,24 +133,41 @@ const CompanySettings: React.FC = () => {
   const handleDeployContract = async () => {
     const formData = watch()
     
-    if (!formData.name || !formData.symbol) {
-      toast.error('Veuillez remplir le nom de l\'entreprise et le symbole')
+    if (!company?.name) {
+      toast.error('Veuillez d\'abord sauvegarder votre profil entreprise')
+      setActiveTab('profile')
+      return
+    }
+
+    if (!formData.symbol) {
+      toast.error('Veuillez remplir le symbole du token')
+      return
+    }
+
+    if (!address) {
+      toast.error('Veuillez connecter votre wallet')
       return
     }
 
     try {
+      setShowDeploymentDetails(true)
+      
       const result = await deployContract(
-        formData.name,
-        formData.description || '',
+        company.name,
+        company.description || '',
         formData.symbol,
         formData.blockchain
       )
 
       if (result) {
         await setContractAddress(result.contractAddress, result.transactionHash)
+        toast.success('Smart contract déployé et configuré avec succès!')
+        setActiveTab('profile') // Retour à l'onglet profil
       }
     } catch (error) {
       console.error('Deploy error:', error)
+    } finally {
+      setShowDeploymentDetails(false)
     }
   }
 
@@ -429,6 +450,22 @@ const CompanySettings: React.FC = () => {
                   
                   {/* Deployment form */}
                   <div className="max-w-md mx-auto space-y-4">
+                    {!company?.name && (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                        <div className="flex items-center space-x-2">
+                          <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                          <div>
+                            <p className="text-sm font-medium text-yellow-800">
+                              Profil entreprise requis
+                            </p>
+                            <p className="text-sm text-yellow-700">
+                              Veuillez d'abord sauvegarder votre profil entreprise dans l'onglet "Profil Entreprise"
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Blockchain
@@ -462,7 +499,7 @@ const CompanySettings: React.FC = () => {
                     
                     <button
                       onClick={handleDeployContract}
-                      disabled={isDeploying || !watch('name')}
+                      disabled={isDeploying || !company?.name || !watchedSymbol}
                       className="btn-primary flex items-center space-x-2 mx-auto"
                     >
                       {isDeploying ? (
@@ -477,6 +514,22 @@ const CompanySettings: React.FC = () => {
                         </>
                       )}
                     </button>
+
+                    {/* Deployment Status */}
+                    {(isDeploying || deploymentStatus) && (
+                      <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                        <p className="text-sm text-blue-800 font-medium">
+                          {deploymentStatus || 'Préparation du déploiement...'}
+                        </p>
+                        {isDeploying && (
+                          <div className="mt-2">
+                            <div className="w-full bg-blue-200 rounded-full h-2">
+                              <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -485,7 +538,7 @@ const CompanySettings: React.FC = () => {
             {/* Network Info */}
             <div className="panel p-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Réseau Blockchain
+                Réseaux Blockchain Disponibles
               </h3>
               <div className="grid md:grid-cols-3 gap-4">
                 {blockchains.filter(b => b.testnet).map((blockchain) => (

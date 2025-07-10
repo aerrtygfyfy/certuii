@@ -158,15 +158,15 @@ contract CompanyCertificate is ERC721, ERC721URIStorage, Ownable {
         super._beforeTokenTransfer(from, to, tokenId, batchSize);
     }
     
-    function approve(address to, uint256 tokenId) public override {
-        require(!certificates[tokenId].isSoulbound, "Soulbound token cannot be approved");
-        super.approve(to, tokenId);
-    }
-    
-    function setApprovalForAll(address operator, bool approved) public override {
-        // Allow setting approval for all, but individual transfers will be blocked for SBTs
-        super.setApprovalForAll(operator, approved);
-    }
+  function approve(address to, uint256 tokenId) public override(ERC721 ,IERC721) {
+    require(!certificates[tokenId].isSoulbound, "Soulbound token cannot be approved");
+    super.approve(to, tokenId);
+}
+
+function setApprovalForAll(address operator, bool approved) public override(ERC721 , IERC721) {
+    super.setApprovalForAll(operator, approved);
+}
+
     
     // Required overrides
     function _burn(uint256 tokenId) internal override(ERC721, ERC721URIStorage) {

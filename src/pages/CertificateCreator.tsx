@@ -105,6 +105,7 @@ const CertificateCreator: React.FC = () => {
           tokenId: mintResult.tokenId,
           certificateId,
           contractAddress: mintResult.contractAddress,
+          contractAddress: company.contractAddress,
           recipientAddress: certificateData.recipientAddress,
           recipientName: certificateData.recipientName,
           courseName: certificateData.courseName,
@@ -155,14 +156,14 @@ const CertificateCreator: React.FC = () => {
               Smart Contract Requis
             </h2>
             <p className="text-gray-600 mb-6">
-              Vous devez d'abord déployer votre smart contract pour pouvoir créer des certificats.
+              Vous devez d'abord configurer votre entreprise et déployer votre smart contract pour pouvoir créer des certificats.
             </p>
-            <a
-              href="/settings"
+            <Link
+              to="/settings"
               className="btn-primary"
             >
               Configurer maintenant
-            </a>
+            </Link>
           </div>
         </div>
       </div>
